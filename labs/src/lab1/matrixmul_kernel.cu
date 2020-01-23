@@ -41,7 +41,7 @@
 #define _MATRIXMUL_KERNEL_H_
 
 #include <stdio.h>
-#include "matrixmul.h"
+#include "matrixmul.h" //how does the device know to load this as well?
 
 ////////////////////////////////////////////////////////////////////////////////
 //! Simple test kernel for device functionality
@@ -52,13 +52,13 @@
 __global__ void MatrixMulKernel(Matrix M, Matrix N, Matrix P)
 {
 	//Multiply the two matrices
-
-
-
-
-
-
-
+	float Pvalue = 0;
+	for (int k = 0; k < M.width; ++k){
+		float Mel = *(M.elements + threadIdx.y*M.width + k); //traverse mem row wise
+		float Nel = *(N.elements + k*N.width + threadIdx.x); //traverse mem column wise
+		Pvalue += Mel * Nel;
+	}
+	*(P.elements + threadIdx.y*M.width+threadIdx.x) = Pvalue;
 }
 
 #endif // #ifndef _MATRIXMUL_KERNEL_H_
