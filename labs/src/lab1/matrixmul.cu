@@ -145,18 +145,29 @@ int main(int argc, char** argv) {
 void MatrixMulOnDevice(const Matrix M, const Matrix N, Matrix P)
 {
 	//Interface host call to the device kernel code and invoke the kernel
+	//Perform our Cudaallocs
+	Matrix Md, Nd, Pd;
+	Md = AllocateDeviceMatrix(M);
+	Nd = AllocateDeviceMatrix(N);
+	Pd = AllocateDeviceMatrix(P);
+	//copy over M & N matrices
+	CopyToDeviceMatrix(Md, M);
+	CopyToDeviceMatrix(Nd, N);
+	//Specify grid and block sizes
+	dim3 dimGrid(1,1);
+	dim3 dimBlock(Md.width, Md.width);
+
+	//Invoke Kern 
+	MatrixMulKernel <<< dimGrid, dimBlock>>>(Md, Nd, Pd);
 	
-	
-	
-	
-	
-	
+	//get stuff back
+	CopyFromDeviceMatrix(P,Pd);
 }
 
 // Allocate a device matrix of same size as M.
 Matrix AllocateDeviceMatrix(const Matrix M)
 {
-	Matrix Mdevice = M;
+	Matrix Mdevice = M; //does this copy M to a new address or do we just use M's address as d_a?
 	int size = M.width * M.height * sizeof(float);
 	cudaMalloc((void**)&Mdevice.elements, size);
 	return Mdevice;
