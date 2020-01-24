@@ -159,9 +159,13 @@ void MatrixMulOnDevice(const Matrix M, const Matrix N, Matrix P)
 
 	//Invoke Kern 
 	MatrixMulKernel <<< dimGrid, dimBlock>>>(Md, Nd, Pd);
-	
+	cudaDeviceSynchronize();
 	//get stuff back
 	CopyFromDeviceMatrix(P,Pd);
+
+	cudaFree(Md.elements);
+	cudaFree(Nd.elements);
+	cudaFree(Pd.elements);
 }
 
 // Allocate a device matrix of same size as M.
