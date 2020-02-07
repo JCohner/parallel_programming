@@ -48,11 +48,48 @@
 //! @param g_idata  input data in global memory
 //! @param g_odata  output data in global memory
 ////////////////////////////////////////////////////////////////////////////////
+
+#define TILE_DIM 32 //would like to get this # from block size in DEVICE function
+
 // Matrix multiplication kernel thread specification
 __global__ void MatrixMulKernel(Matrix M, Matrix N, Matrix P)
 {
+	//allocate answer tile Pt to shared mem
+	__shared__ float Pt[TILE_DIM * (TILE_DIM + 1)]; //allocate 32x33 matrix in mem
+	unsigned int bRow, bCol;
+	bRow = blockIdx.y;
+	bCol = blockIdx.x;
+
+	float Pvalue = 0;
+
+	// //get index within sub matrix
+	unsigned int tRow, tCol;
+	tRow = threadIdx.y;
+	tCol = threadIdx.x;
+
+	//get common dimension
+	unsigned int comm_dim = (M.width);
+
+	//block row offset
+	unsigned int M_block_row_offset = bRow * M.width * TILE_DIM;
+	unsigned int M_thread_row_offset = tRow * M.width;
+	unsigned int N_thread_row_offset = tRow * N.width;
+	unsigned int N_thread_col_offset = bCol * blockDim.x;
+
+	//loop through all rows and colomns of tiles of M and N to compute this value in the output Tile
+	for (int i = 0; i <  comm_dim/TILE_DIM; ++i)
+	{
+		//declare our sub matrices into shared mem
+		__shared__ float Mt[TILE_DIM * (TILE_DIM + 1)];
+		__shared__ float Nt[TILE_DIM * (TILE_DIM + 1)];
+
+		//move data from our matrices in global mem in a coalesced manner
+		//each thread in warp should load in a row
+		*(Mt + tRow * blockDim.x + tCol) = *(M.elements + M_block_row_offset + M_thread_row_offset + i * blockDim.y + tCol);
+		*(Nt + tRow * blockDim.x + tCol) = *(N.elements + i * N.width * TILE_DIM + N_thread_row_offset + N_thread_col_offset + tCol);
 
 
+	} 
 }
 
 #endif // #ifndef _MATRIXMUL_KERNEL_H_
