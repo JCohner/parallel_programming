@@ -140,6 +140,7 @@ int main(int argc, char** argv) {
 ////////////////////////////////////////////////////////////////////////////////
 //! Run a simple test for CUDA
 ////////////////////////////////////////////////////////////////////////////////
+#define BLOCK_DIM 32
 void MatrixMulOnDevice(const Matrix M, const Matrix N, Matrix P)
 {
 	// Load M and N to the device
@@ -153,8 +154,30 @@ void MatrixMulOnDevice(const Matrix M, const Matrix N, Matrix P)
 	CopyToDeviceMatrix(Pd, P); // Clear memory
 
 	// Setup the execution configuration
+	dim3 dimBlock(BLOCK_DIM, BLOCK_DIM,1);
+	// int dimX = (P.width + BLOCK_DIM - 1) / BLOCK_DIM;;
+	// int dimY = (P.height + BLOCK_DIM - 1) / BLOCK_DIM;;
+	// dim3 dimGrid(dimX, dimY,1);
+
+	int dimX = P.width/dimBlock.y;
+	int dimY = P.height/dimBlock.x;
+	if (P.width % dimBlock.y)
+	{
+		++dimX;
+	}
+	if (P.height % dimBlock.x)
+	{
+		++dimY;
+	}
+	dim3 dimGrid(dimX,dimY); 
+	printf("M rows: %u, M cols: %u\n", M.height, M.width);
+	printf("N rows: %u, N cols: %u\n", N.height, N.width);
+	printf("grid x: %u, grid y: %u\n", dimGrid.x, dimGrid.y);
 
 	// Launch the device computation threads!
+	MatrixMulKernel <<< dimGrid, dimBlock >>> (Md, Nd, Pd);
+	//maybe put a wait to sync here
+	cudaDeviceSynchronize();
 
 	// Read P from the device
 	CopyFromDeviceMatrix(P, Pd); 

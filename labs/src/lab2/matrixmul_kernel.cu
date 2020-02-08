@@ -48,18 +48,17 @@
 //! @param g_idata  input data in global memory
 //! @param g_odata  output data in global memory
 ////////////////////////////////////////////////////////////////////////////////
-
-#define TILE_DIM 32 //would like to get this # from block size in DEVICE function
-
 // Matrix multiplication kernel thread specification
 __global__ void MatrixMulKernel(Matrix M, Matrix N, Matrix P)
 {
+	const int TILE_DIM = 32;
 	//allocate input and answer tiles to shared mem with padding to avoid bank conflicts within warps
 	__shared__ float Pt[TILE_DIM][TILE_DIM + 1]; 
 	__shared__ float Mt[TILE_DIM][TILE_DIM + 1];
 	__shared__ float Nt[TILE_DIM][TILE_DIM + 1];
-	memset(Nt, 0, TILE_DIM * (TILE_DIM + 1));
-	memset(Mt, 0, TILE_DIM * (TILE_DIM + 1));
+
+	// memset(Nt, 0, TILE_DIM * (TILE_DIM + 1));
+	// memset(Mt, 0, TILE_DIM * (TILE_DIM + 1));
 	float Pvalue = 0;
 	//get block coords in grid
 	unsigned int bRow, bCol;
@@ -71,22 +70,32 @@ __global__ void MatrixMulKernel(Matrix M, Matrix N, Matrix P)
 	tCol = threadIdx.x;
 
 	//index matches rows of Pd & Md
-	unsigned int row = bRow * TILE_DIM + tRow;
+	unsigned int row = bRow * blockDim.y + tRow;
 	//index matches cols of pd & Nd
-	unsigned int col = bCol * TILE_DIM + tCol;
+	unsigned int col = bCol * blockDim.x + tCol;
 
 	//get how many tiles needed to step across input matrices based on their common dimension (width {cols} of M or height {rows} of N)
-	unsigned int steps = M.width / TILE_DIM;
-	if (M.width % TILE_DIM){
-		steps++;
-	} 
+	unsigned int steps = (P.height + TILE_DIM - 1) / TILE_DIM;
+	// if (M.width % TILE_DIM){
+	// 	steps++;
+	// } 
 
 	//loop through all rows and colomns of tiles of M and N to compute this value in the output Tile
 	for (int i = 0; i <  steps; i++) {
 		//move data from our matric(es in global mem in a coalesced manner
 		//each thread in warp should load in a row
-		Mt[tRow][tCol] = M.elements[row + i * TILE_DIM + tCol];
-		Nt[tRow][tCol] = N.elements[(i * N.width * TILE_DIM) + (tRow * N.width) + col];
+		if ((i * TILE_DIM + tCol) < M.width && row < M.height){
+      Mt[tRow][tCol] = M.elements[row * M.width + i * TILE_DIM + tCol];
+    } 
+    else {
+      Mt[tRow][tCol] = 0;
+    }
+    if (col < N.width && (i * TILE_DIM + tRow) < N.height){
+		  Nt[tRow][tCol] = N.elements[(i * TILE_DIM + tRow) * N.width + col];
+    } 
+    else {
+      Nt[tRow][tCol] = 0;
+    }
 		__syncthreads();		
 
 		for (int j = 0; j < TILE_DIM; ++j) {
@@ -94,9 +103,17 @@ __global__ void MatrixMulKernel(Matrix M, Matrix N, Matrix P)
 		}
 		__syncthreads();		
 	} 
-	//write back
 	Pt[tRow][tCol] = Pvalue;
-	P.elements[row * P.width + col]= Pt[tRow][tCol];
+	__syncthreads();
+	for(int j = 0; j < TILE_DIM; j++)
+	{
+		int column = blockIdx.x * TILE_DIM + j;
+
+		if (row < P.height && column < P.width)
+		{
+	  	P.elements[row * P.width + column] = Pt[tRow][j];
+		}
+  }	
 	return;
 }
 
